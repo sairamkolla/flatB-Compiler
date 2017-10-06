@@ -1,42 +1,123 @@
 %{
+#include "head.h"
 #include "parser.tab.h"
+void yyerror(string s);
 %}
 
+
+%option yylineno
+
+SINGLE_QUOTES 			"\'"
+DOUBLE_QUOTES 			"\""
+COLON 					":"
+SEMICOLON 				";"
+COMMA 					","
+OPENROUND 				"\("
+CLOSEROUND 				"\)"
+OPENSQUARE 				"\["
+CLOSESQUARE 			"\]"
+OPENCURLY 				"\{"
+CLOSECURLY 				"\}"
+
+
+WHITESPACES 			[ \t\n]+
+
+
+/*Regex related to special characters and operators*/
+
+NOT 					"!"
+PLUS 					"+"
+MINUS 					"-"
+UNARY 					'-'
+MULT 					"\*"
+DIV 					"/"
+MOD 					"%"
+AND 					"&&"
+OR 						"||"
+ASSIGN 					"="
+EQ 						"=="
+NEQ 					"!="
+GT 						">"
+LT 						"<"
+GTEQ 					">="
+LTEQ 					"<="
+
+/* Regular Expressions related to handling numbers */
+
+DEC_LITERAL 			[0-9]+
+HEX_LITERAL 			0[xX][0-9a-fA-F]+
+
+/* Regular Expressions related to handling names */
+DECLARATION_STARTER		"declblock"		
+CODE_STARTER			"codeblock"		
+IF                      "if"
+ELSE                    "else"
+BREAK                   "break"
+CONTINUE                "continue"
+FOR                     "for"
+WHILE					"while"
+ID 						[a-zA-Z][a-zA-Z0-9]*
+PRINT 					"print"
+PRINTLN					"println"
+GOTO 					"goto"
+READ 					"read"
+
+/* Regular Expressions related to handling types */
+INTEGER 				"int"
+BOOLEAN 				"boolean"
+TRUE 					"true"
+FALSE 					"false"
+
 %%
-"declblock"		return declaration_starter;
-"codeblock"		return code_starter;
 
-\"[ -~]*\"	return STR_LIT;
-[0-9][0-9]*		return NUM; 
+\"[ -~]*\"				{ yylval.strVal = new string(yytext);return STR_LITERAL;}
+{DECLARATION_STARTER}	{ return DECLARATION_STARTER;}
+{CODE_STARTER}			{ return CODE_STARTER;}
 
-"int"		return INT;
-"while"		return WHILE;
-"for"		return FOR;
-"if"		return IF;
-"else"		return ELSE;
-"goto"		return GOTO;
-"print"		return PRINT;
-"println"	return PRINTLN;
-"read"		return READ;
+{INTEGER}				{ yylval.strVal = new string(yytext); return DATA_TYPE;}
+{BOOLEAN}				{ yylval.strVal = new string(yytext); return DATA_TYPE;}
+{TRUE}					{ yylval.strVal = new string(yytext); return TRUE;}
+{FALSE}					{ yylval.strVal = new string(yytext); return FALSE;}
 
-[a-zA-Z][a-zA-Z0-9]*   return ID;
+{PLUS}					{ yylval.strVal = new string(yytext); return PLUS;}
+{MINUS}					{ yylval.strVal = new string(yytext); return MINUS;}
+{UNARY}					{ yylval.strVal = new string(yytext); return UNARY;}
+{MULT}					{ yylval.strVal = new string(yytext); return MULT;}
+{DIV}					{ yylval.strVal = new string(yytext); return DIV;}
+{MOD}					{ yylval.strVal = new string(yytext); return MOD;}
 
-"+"|"-"|"*"|"/"		return A_OP;
-"=="|"!="|"<"|">"|"<="|">="    return C_OP;
-"&&"|"||"    return L_OP;
-"("		return '(';
-")"		return ')';
-"{"		return '{';
-"}"		return '}';
-"["		return '[';
-"]"		return ']';
-"="		return '=';
-","		return ',';
-":"		return ':';
-";"     return ';';
+{AND}					{ yylval.strVal = new string(yytext); return AND;}
+{OR}					{ yylval.strVal = new string(yytext); return OR;}
 
-[ \t\n]		{ /* Do nothing */ }
-.		{ 
-		  printf("Unexpected token encountered: %s\n", yytext); 
-		  return ETOK;
-		}
+{ASSIGN}				{ yylval.strVal = new string(yytext); return ASSIGN;}
+{EQ}					{ yylval.strVal = new string(yytext); return EQ;}
+{NEQ}					{ yylval.strVal = new string(yytext); return NEQ;}
+{GT}					{ yylval.strVal = new string(yytext); return GT;}
+{LT}					{ yylval.strVal = new string(yytext); return LT;}
+{GTEQ}					{ yylval.strVal = new string(yytext); return GTEQ;}
+{LTEQ}					{ yylval.strVal = new string(yytext); return LTEQ;}
+{NOT}					{ yylval.strVal = new string(yytext); return NOT;}
+
+{READ}					{ yylval.strVal = new string(yytext); return READ;}
+{PRINTLN}				{ yylval.strVal = new string(yytext); return PRINTLN;}
+{PRINT}					{ yylval.strVal = new string(yytext); return PRINT;}
+
+
+{DEC_LITERAL}			{ yylval.intVal = atoi(yytext); return DEC_LITERAL;}
+{HEX_LITERAL}			{ sscanf(yytext, "%d", &yylval.intVal); return HEX_LITERAL;}
+
+
+
+{IF}					{ return IF;}
+{ELSE}					{ return ELSE;}
+{FOR}					{ return FOR;}
+{WHILE}					{ return WHILE;}
+{GOTO}					{ return GOTO;}
+{BREAK}					{ return BREAK;}
+{CONTINUE}				{ return CONTINUE;}
+{ID}					{ yylval.strVal = new string(yytext); return ID;}
+
+[ \t\n]						{ }
+.						{ return yytext[0];}
+
+%%
