@@ -1,5 +1,5 @@
-bcc: parser.tab.c lex.yy.c
-	gcc parser.tab.c lex.yy.c -lfl -o bcc
+bcc: parser.tab.c lex.yy.c head.h
+	g++ parser.tab.c lex.yy.c -lfl -o bcc
 
 parser.tab.c: parser.y
 	bison -d parser.y
