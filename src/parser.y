@@ -1,5 +1,6 @@
 %{
 #include "head.h"
+#include "ast.h"
 extern FILE *yyin;
 void yyerror(string s);
 int yylex(void);
