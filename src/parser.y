@@ -261,6 +261,7 @@ int main(int argc, char *argv[]){
 	Builder = new IRBuilder<>(getGlobalContext());
     flatBToLLVM = new Module("flatBToLLVM", getGlobalContext());
 	yyparse();
+	cout << "Lexical analysis successfull" << endl;
 	Interpreter evaluator;
     root->accept(&evaluator);
     flatBToLLVM->dump();

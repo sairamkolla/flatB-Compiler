@@ -67,7 +67,7 @@ READ 					"read"
 
 /* Regular Expressions related to handling types */
 INTEGER 				"int"
-BOOLEAN 				"boolean"
+BOOLEAN 				"bool"
 TRUE 					"true"
 FALSE 					"false"
 
