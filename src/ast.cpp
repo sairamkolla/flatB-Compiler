@@ -64,7 +64,7 @@ Value* Interpreter::visit(ASTLocationNode* node) {
 		if (symTable.find(var) != symTable.end())
 			cout << "variable is there in symbol table" << endl;
 		*/
-		cout << "returned location of " << var <<endl;
+		cout << "returned location of " << var << endl;
 		return symTable[var];
 	} else {
 		var = node->getVarName();
@@ -87,7 +87,7 @@ Value* Interpreter::visit(ASTAssignmentStatementNode* node) {
 	Value *ptr = node->getLocation()->accept(this);
 	Value *val = node->getExpression()->accept(this);
 	string op = node->getOperator();
-	if (val->getType()->isPointerTy()){
+	if (val->getType()->isPointerTy()) {
 		val = Builder->CreateLoad(val, "tmp");
 		cout << "loadedd" << endl;
 	}
@@ -251,67 +251,102 @@ Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
 	Value *v = ifExp->accept(this);
 	Value *ifVal = Builder->getInt32(1);
 	Value *elseVal = Builder->getInt32(1);
+
+	BasicBlock *ifb, *elseb, *conb, *afterb;
+
 	if (!v) {
 		return nullptr;
 	}
-	if (v->getType()->isIntegerTy()) {
-		if (v->getType()->isIntegerTy(32)) {
-			v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
+
+	if (v->getType()->isIntegerTy(32)) {
+		v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
+	}
+	else {
+		v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
+	}
+	if (elseBlock) {
+		conb = BasicBlock::Create(Context, "check condition", cur_block->getParent());
+		ifb = BasicBlock::Create(Context, "if block", cur_block->getParent());
+		elseb = BasicBlock::Create(Context, "else block", cur_block->getParent());
+		afterb = BasicBlock::Create(Context, "after block", cur_block->getParent());
+
+		Builder->CreateBr(conb);
+
+		Builder->SetInsertPoint(conb);
+		cur_block = conb;
+		Value *v = ifExp->accept(this);
+
+		if (!v) {
+			return nullptr;
 		}
-		else {
-			v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
-		}
-		Function *F = Builder->GetInsertBlock()->getParent();
-		BasicBlock *ThenBB = BasicBlock::Create(getGlobalContext(), "then", F);
-		if (elseBlock) {
-			BasicBlock *ElseBB = BasicBlock::Create(getGlobalContext(), "else");
-			BasicBlock *MergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
-			Builder->CreateCondBr(v, ThenBB, ElseBB);
-			Builder->SetInsertPoint(ThenBB);
-
-			ifVal = ifBlock->accept(this);
-			if (ifVal) {
-				Builder->CreateBr(MergeBB);
-			}
-			ThenBB = Builder->GetInsertBlock();
-
-			F->getBasicBlockList().push_back(ElseBB);
-			Builder->SetInsertPoint(ElseBB);
-
-			elseVal = elseBlock->accept(this);
-			if (elseVal) {
-				Builder->CreateBr(MergeBB);
-			}
-			ElseBB = Builder->GetInsertBlock();
-
-			if (!ifVal && !elseVal) {
-				return Builder->getInt32(0);
+		if (v->getType()->isIntegerTy()) {
+			if (v->getType()->isIntegerTy(32)) {
+				v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
 			}
 			else {
-				F->getBasicBlockList().push_back(MergeBB);
-				Builder->SetInsertPoint(MergeBB);
-				return Builder->getInt32(0);
+				v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
 			}
+			Builder->CreateCondBr(v, ifb, elseb);
 		}
-		else {
-			BasicBlock *MergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
-			Builder->CreateCondBr(v, ThenBB, MergeBB);
-			Builder->SetInsertPoint(ThenBB);
 
-			ifVal = ifBlock->accept(this);
-			if (ifVal) {
-				Builder->CreateBr(MergeBB);
+		// If block
+		Builder->SetInsertPoint(ifb);
+		cur_block = ifb;
+		ifBlock->accept(this);
+		Builder->CreateBr(afterb);
+
+		// Else Block
+		Builder->SetInsertPoint(elseb);
+		cur_block = elseb;
+		elseBlock->accept(this);
+		Builder->CreateBr(afterb);
+
+		//After Block
+		Builder->SetInsertPoint(afterb);
+		cur_block = afterb;
+		return Builder->getInt32(0);
+
+
+	}
+	else {
+		conb = BasicBlock::Create(Context, "check condition", cur_block->getParent());
+		ifb = BasicBlock::Create(Context, "if block", cur_block->getParent());
+		afterb = BasicBlock::Create(Context, "after block", cur_block->getParent());
+
+		Builder->CreateBr(conb);
+
+		Builder->SetInsertPoint(conb);
+		cur_block = conb;
+		Value *v = ifExp->accept(this);
+
+		if (!v) {
+			return nullptr;
+		}
+		if (v->getType()->isIntegerTy()) {
+			if (v->getType()->isIntegerTy(32)) {
+				v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
 			}
-			ThenBB = Builder->GetInsertBlock();
-
-			F->getBasicBlockList().push_back(MergeBB);
-			Builder->SetInsertPoint(MergeBB);
-
-			return Builder->getInt32(0);
+			else {
+				v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
+			}
+			Builder->CreateCondBr(v, ifb, afterb);
 		}
+
+		// If block
+		Builder->SetInsertPoint(ifb);
+		cur_block = ifb;
+		ifBlock->accept(this);
+		Builder->CreateBr(afterb);
+
+		//After Block
+		Builder->SetInsertPoint(afterb);
+		cur_block = afterb;
+		return Builder->getInt32(0);
 	}
 
 
+
+	
 
 
 	return nullptr;
@@ -372,7 +407,7 @@ Value* Interpreter::visit(ASTForStatementDeclNode *node) {
 		if (v->getType()->isPointerTy()) {
 			v = Builder->CreateLoad(v);
 		}
-		
+
 		Value *next_v = Builder->CreateAdd(v, diff_value, "ADD");
 		v = symTable[it];
 		Builder->CreateStore(next_v, v, false);
@@ -386,15 +421,15 @@ Value* Interpreter::visit(ASTForStatementDeclNode *node) {
 	return Builder->getInt32(0);
 
 
-/*
-	loop *thisLoop = (loop *)malloc(sizeof(loop));
-	thisLoop->entryBB = LoopBB;
-	thisLoop->afterBB = AfterBB;
-	thisLoop->var_ = var;
-	thisLoop->endExp = end;
-	loops.push(thisLoop);
-	loops.pop();
-	*/
+	/*
+		loop *thisLoop = (loop *)malloc(sizeof(loop));
+		thisLoop->entryBB = LoopBB;
+		thisLoop->afterBB = AfterBB;
+		thisLoop->var_ = var;
+		thisLoop->endExp = end;
+		loops.push(thisLoop);
+		loops.pop();
+		*/
 }
 Value* Interpreter::visit(ASTWhileStatementDeclNode *node) {
 	cout << "into the while loop" << endl;
@@ -438,7 +473,21 @@ Value* Interpreter::visit(ASTWhileStatementDeclNode *node) {
 
 }
 Value* Interpreter::visit(ASTReadNode * node) {
-	return nullptr;
+	vector<Value* > args;
+	string to_read = "%d";
+	Value* loc  = node->getLocation()->accept(this);
+
+	llvm::Function *scanf_func = flatBToLLVM->getFunction("scanf");
+
+	if (!scanf_func) {
+		scanf_func = llvm::Function::Create(llvm::FunctionType::get(llvm::IntegerType::getInt32Ty(Context), true), llvm::GlobalValue::ExternalLinkage, "scanf", flatBToLLVM);
+		scanf_func->setCallingConv(llvm::CallingConv::C);
+		llvm::AttributeSet printf_PAL;
+		scanf_func->setAttributes(printf_PAL);
+	}
+	args.push_back(Builder->CreateGlobalStringPtr(to_read.c_str()));
+	args.push_back(loc);
+	return Builder->CreateCall(scanf_func, args);
 }
 Value* Interpreter::visit(ASTStatementDeclListNode * node) {
 	return nullptr;
@@ -446,7 +495,7 @@ Value* Interpreter::visit(ASTStatementDeclListNode * node) {
 
 Value* Interpreter::visit(ASTBoolLiteralExpressionNode * node) {
 	cout << "returning " << node->getValue() << endl;
-	if(node->getValue()==true)
+	if (node->getValue() == true)
 		return Builder->getInt1(1);
 	return Builder->getInt1(0);
 }

@@ -5,8 +5,13 @@ int b;
 }
 
 codeblock{
-a = 1;
-d[1] = 6;
-print d[1],"sdfs dfsdfsdfsdfsdfsfsd";
+b = 5;
+while(b>0){
+read a;
+println a;
+b = b-1;
 }
+
+}
+
 

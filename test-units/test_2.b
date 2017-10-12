@@ -12,8 +12,10 @@ a[2] = 5;
 a[3] = 3;
 a[4] = 1;
 flag=true;
-if(a[2]){
+if(a[2]==53){
 	print "Inside the if statement";
+}else{
+	print "Inside the else statemetn";
 }
 
 for i=0,4{
