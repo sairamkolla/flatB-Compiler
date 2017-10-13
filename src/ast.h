@@ -31,8 +31,7 @@ const int _negate = 32768;
 const int _mod = 65536;
 
 enum exprType { binary = 1, location = 2, literal = 3 , Unary = 4};
-enum statementType { assign_statement = 1, for_statement = 2, if_statement = 3, while_statement = 4, 
-	label_statement = 5, goto_statement = 6, print_statement = 8, read_statement = 9,default_statement=0};
+enum statementType { assign_statement = 1, for_statement = 2, if_statement = 3, while_statement = 4, label_statement = 5, goto_statement = 6, print_statement = 8, read_statement = 9,default_statement=0};
 
 
 class Symbol;
@@ -173,9 +172,13 @@ class ASTUnaryExpressionNode : public ASTExpressionNode{
 			((!op.compare("-")) ? operator_ = _unaryminus :
 			((!op.compare("!")) ? operator_ = _negate : operator_ = _error));
 		}
+		ASTExpressionNode* getExpression(){
+			return expr_;
+		}
 		int getOperatorId(){
 			return operator_;
 		}
+		Value* accept(Visitor*)override;
 
 	private:
 		ASTExpressionNode* expr_;
@@ -189,9 +192,6 @@ class ASTStatementDeclNode : public ASTNode {
 		virtual statementType get_stmt_type(){
 			return statementId_;
 		}
-		virtual string get_label_name(){
-            return "None";
-        };
 		
 	private:
 		statementType statementId_;
@@ -257,8 +257,7 @@ class ASTBlock : public ASTNode {
 		}
 		Value *accept(Visitor *) override;
 	private:
-		ASTStatementDeclListNode *statementList_;
-		
+		ASTStatementDeclListNode *statementList_;		
 };
 
 
@@ -378,13 +377,14 @@ class ASTLabelDeclNode : public ASTStatementDeclNode {
 	public:
 		ASTLabelDeclNode(string l) : ASTStatementDeclNode(label_statement) {
 			labelName_ = l;
+			//cout << "declared label " << label_statement << endl;
 		}
-		virtual string get_label_name(){
+		string getLabelName(){
 			return labelName_;
 		}
+		Value* accept(Visitor*)override;
 	private:
-		string labelName_;
-		int stmt_n0;
+		string labelName_;	
 };
 
 class ASTGotoDeclNode : public ASTStatementDeclNode {
@@ -398,7 +398,7 @@ class ASTGotoDeclNode : public ASTStatementDeclNode {
 			label_ = l;
 			condition_ = NULL;
 		}
-		virtual string get_label_name(){
+		virtual string getLabelName(){
 			return label_;
 		}
 		ASTExpressionNode* getExpression(){
@@ -417,6 +417,7 @@ class ASTPrintLitNode : ASTNode{
 		ASTPrintLitNode(ASTExpressionNode *temp){
 			isexpr_ = true;
 			expr_ = temp;
+			//cout << "declared print node" << endl; 
 		};
 		ASTPrintLitNode(string temp){
 			isexpr_ = false;
@@ -489,6 +490,7 @@ class Visitor {
 		virtual Value* visit(ASTGotoDeclNode*) = 0;
 		virtual Value* visit(ASTPrintNode* ) = 0;
 		virtual Value* visit(ASTBinaryExpressionNode* ) = 0;
+		virtual Value* visit(ASTUnaryExpressionNode* ) = 0;
 		virtual Value* visit(ASTIfStatementDeclNode* ) = 0;
 		virtual Value* visit(ASTForStatementDeclNode* ) = 0;
 		virtual Value* visit(ASTWhileStatementDeclNode* ) = 0;
@@ -498,6 +500,7 @@ class Visitor {
 		
 		virtual Value* visit(ASTPrintLitNode*) = 0;
 		virtual Value* visit(ASTStatementDeclListNode*) = 0;
+		virtual Value* visit(ASTLabelDeclNode*) = 0;
 		//virtual Value* visit(ASTParameterDecl*) = 0;
 		//virtual Value* visit(ASTParameterDeclListNode*) = 0;
 		//virtual Value* visit(ASTDeclBlockNode*) = 0;
@@ -517,6 +520,7 @@ class Interpreter : public Visitor{
 		Value* visit(ASTGotoDeclNode* node);
 		Value* visit(ASTPrintNode *node);
 		Value* visit(ASTBinaryExpressionNode *node);
+		Value* visit(ASTUnaryExpressionNode*);
 		Value* visit(ASTIfStatementDeclNode *node);
 		Value* visit(ASTForStatementDeclNode *node);
 		Value* visit(ASTWhileStatementDeclNode *node);
@@ -526,6 +530,7 @@ class Interpreter : public Visitor{
 
 		Value* visit(ASTPrintLitNode *node);
 		Value* visit(ASTStatementDeclListNode *node);
+		Value* visit(ASTLabelDeclNode *node);
 		//Value* visit(ASTParameterDecl *node);
 		//Value* visit(ASTParameterDeclListNode *node);
 		//Value* visit(ASTDeclBlockNode *node);
@@ -544,5 +549,3 @@ class Symbol {
 
 
 void annotateSymbolTable(int datatype, list<Symbol*> *VariableList);
-
-

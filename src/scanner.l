@@ -38,6 +38,11 @@ MOD 					"%"
 AND 					"&&"
 OR 						"||"
 ASSIGN 					"="
+PLUSASSIGN				"+="
+MINUSASSIGN				"-="
+DIVASSIGN				"/="
+MULASSIGN				"*="
+MODASSIGN				"%="
 EQ 						"=="
 NEQ 					"!="
 GT 						">"
@@ -93,6 +98,13 @@ FALSE 					"false"
 {OR}					{ yylval.strVal = new string(yytext); return OR;}
 
 {ASSIGN}				{ yylval.strVal = new string(yytext); return ASSIGN;}
+{PLUSASSIGN}			{ yylval.strVal = new string(yytext); return PLUSASSIGN;}
+{MINUSASSIGN}			{ yylval.strVal = new string(yytext); return MINUSASSIGN;}
+{DIVASSIGN}				{ yylval.strVal = new string(yytext); return DIVASSIGN;}
+{MULASSIGN}				{ yylval.strVal = new string(yytext); return MULASSIGN;}
+{MODASSIGN}				{ yylval.strVal = new string(yytext); return MODASSIGN;}
+
+
 {EQ}					{ yylval.strVal = new string(yytext); return EQ;}
 {NEQ}					{ yylval.strVal = new string(yytext); return NEQ;}
 {GT}					{ yylval.strVal = new string(yytext); return GT;}

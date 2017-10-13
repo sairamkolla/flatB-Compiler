@@ -51,7 +51,7 @@ extern IRBuilder<> *Builder;
 %token DATA_TYPE 
 %token ASSIGN EQ NEQ GT LT GTEQ LTEQ
 %token DEC_LITERAL HEX_LITERAL	 STR_LITERAL
-
+%token PLUSASSIGN MINUSASSIGN DIVASSIGN MULASSIGN MODASSIGN
 
 %left PLUS MINUS UNARY
 %left MULT DIV MOD
@@ -73,6 +73,11 @@ extern IRBuilder<> *Builder;
 %type 	<strVal> 	PRINT
 %type 	<strVal> 	PRINTLN
 %type 	<strVal>	ASSIGN
+%type 	<strVal> 	PLUSASSIGN
+%type 	<strVal> 	MINUSASSIGN
+%type 	<strVal> 	DIVASSIGN
+%type 	<strVal> 	MULASSIGN
+%type 	<strVal> 	MODASSIGN
 %type 	<strVal>	MINUS
 %type 	<strVal>	NOT
 %type 	<strVal>	MULT
@@ -103,6 +108,7 @@ extern IRBuilder<> *Builder;
 %type <label_decl>		Label;
 %type <sym>				VariableDecl;
 %type <intVal> 			Type;
+%type <strVal> 			OPERATION;
 
 %type <sym_list> 		VariableDecl_List;
 
@@ -163,7 +169,7 @@ StatementDecl_List	: StatementDecl { $$ = new ASTStatementDeclListNode();$$->pus
 
 
 StatementDecl		: Print_Statement ';' {$$ = $1;}
-					| Location ASSIGN Expr ';' {$$ = new ASTAssignmentStatementNode($1,$3,*($2));}
+					| Location OPERATION Expr ';' {$$ = new ASTAssignmentStatementNode($1,$3,*($2));}
 					//| FOR ID ASSIGN ConstExpr ',' ConstExpr CodeBlock
 					//| FOR ID ASSIGN ConstExpr ','  ConstExpr ',' ConstExpr CodeBlock
 					| FOR ID ASSIGN Expr ',' Expr CodeBlock {$$ = new ASTForStatementDeclNode(*($2),$4,$6,$7);}
@@ -171,19 +177,27 @@ StatementDecl		: Print_Statement ';' {$$ = $1;}
 					| IF Expr CodeBlock {$$ = new ASTIfStatementDeclNode($2,$3);}
 					| IF Expr CodeBlock ELSE  CodeBlock {$$ = new ASTIfStatementDeclNode($2,$3,$5);}
 					| WHILE Expr CodeBlock {$$ = new ASTWhileStatementDeclNode($2,$3);}
-					| Label ':' 
-					| GOTO Label ';' { $$ = new ASTGotoDeclNode($2->get_label_name());}
-					| GOTO Label IF Expr ';' {$$ = new ASTGotoDeclNode($2->get_label_name(),$4);}
+					| Label ':' {$$ = $1;}
+					| GOTO Label ';' { $$ = new ASTGotoDeclNode($2->getLabelName());}
+					| GOTO Label IF Expr ';' {$$ = new ASTGotoDeclNode($2->getLabelName(),$4);}
 					| READ Location ';'{$$ = new ASTReadNode($2);}
 					;
 
-Label				: ID { 	}
+OPERATION 			: ASSIGN 	{$$ = $1;}
+					| PLUSASSIGN	{$$ = $1;}
+					| MINUSASSIGN	{$$ = $1;}
+					| DIVASSIGN	{$$ = $1;}
+					| MULASSIGN	{$$ = $1;}
+					| MODASSIGN {$$ = $1;}
+					;
+
+Label				: ID {$$ = new ASTLabelDeclNode(*($1));}
 					;
 
 Expr 				: Location {$$=new ASTLocationExpressionNode($1);}
 					| IntegerLiteral {$$ = $1;}
-					| MINUS Expr %prec UNARY
-					| NOT Expr
+					| MINUS Expr %prec UNARY {$$ = new ASTUnaryExpressionNode(*($1),$2);}
+					| NOT Expr {$$ = new ASTUnaryExpressionNode(*($1),$2);}
 					| BoolLiteral {$$ = $1;}
 					| '(' Expr ')' { $$ = $2;}
 					| BinExpr	{ $$ = $1;}			

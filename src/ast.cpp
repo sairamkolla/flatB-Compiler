@@ -13,6 +13,7 @@ vector<string> FunArgs;
 Function *fooFunc;
 BasicBlock *entry;
 BasicBlock* cur_block;
+static map<string, BasicBlock*> labels;
 
 void Error(const char *S) {
 	cout << S << endl;
@@ -24,8 +25,8 @@ Value *ErrorV(const char *Str) {
 
 
 Function *createFunc(string name) {
-	std::vector<Type *> Integers(FunArgs.size(), Type::getInt32Ty(Context));
-	FunctionType *funcType = llvm::FunctionType::get(Builder->getInt32Ty(), Integers, false);
+	std::vector<Type *> Integers(FunArgs.size(), Type::getInt64Ty(Context));
+	FunctionType *funcType = llvm::FunctionType::get(Builder->getInt64Ty(), Integers, false);
 	Function* fooFunc = llvm::Function::Create(
 	                        funcType, llvm::Function::ExternalLinkage, name, flatBToLLVM);
 	return fooFunc;
@@ -52,7 +53,7 @@ void CreateFooFunction() {
 
 Value* Interpreter::visit(ASTIntegerLiteralExpressionNode* node) {
 	//	cout << "returning " << node->getValue() << endl;
-	return Builder->getInt32(node->getValue());
+	return Builder->getInt64(node->getValue());
 }
 Value* Interpreter::visit(ASTLocationNode* node) {
 	bool is_array = node->getType();
@@ -64,7 +65,7 @@ Value* Interpreter::visit(ASTLocationNode* node) {
 		if (symTable.find(var) != symTable.end())
 			cout << "variable is there in symbol table" << endl;
 		*/
-		cout << "returned location of " << var << endl;
+		//cout << "returned location of " << var << endl;
 		return symTable[var];
 	} else {
 		var = node->getVarName();
@@ -87,17 +88,44 @@ Value* Interpreter::visit(ASTAssignmentStatementNode* node) {
 	Value *ptr = node->getLocation()->accept(this);
 	Value *val = node->getExpression()->accept(this);
 	string op = node->getOperator();
+	Value *v;
 	if (val->getType()->isPointerTy()) {
 		val = Builder->CreateLoad(val, "tmp");
-		cout << "loadedd" << endl;
 	}
+	switch (op[0]) {
+	case '=':
+		return Builder->CreateStore(val, ptr, false);
+	case '+':
+		v = Builder->CreateLoad(ptr, "ptr");
+		val = Builder->CreateAdd(v, val, "ADD");
+		return Builder->CreateStore(val, ptr, false);
+	case '-':
+		v = Builder->CreateLoad(ptr, "ptr");
+		val = Builder->CreateSub(v, val, "ADD");
+		return Builder->CreateStore(val, ptr, false);
+	case '*':
+		cout << "Mul" << endl;
+		v = Builder->CreateLoad(ptr, "ptr");
+		val = Builder->CreateMul(v, val, "ADD");
+		return Builder->CreateStore(val, ptr, false);
+	case '/':
+		v = Builder->CreateLoad(ptr, "ptr");
+		val = Builder->CreateUDiv(v, val, "ADD");
+		return Builder->CreateStore(val, ptr, false);
+	case '%':
+		cout << "mod operator" << endl;
+		v = Builder->CreateLoad(ptr, "ptr");
+		val = Builder->CreateURem(v, val, "MOD");
+		return Builder->CreateStore(val, ptr, false);
+
+	}
+
 	Builder->CreateStore(val, ptr, false);
-	return Builder->getInt32(0);
+	return Builder->getInt64(0);
 }
-Value* Interpreter::visit(ASTBlock* node) {
+Value* Interpreter::visit(ASTBlock * node) {
 	list<ASTStatementDeclNode *> *s = node->getStatementList()->getStatementList();
 	list<ASTStatementDeclNode *>::iterator it;
-
 	Value *v;
 	for (it = s->begin(); it != s->end(); it++) {
 		v = (*it)->accept(this);
@@ -105,31 +133,50 @@ Value* Interpreter::visit(ASTBlock* node) {
 			cout << "recevied an error " << endl;				// If the return value is nullptr, then
 			break;					// do not process further statements.
 		} else {
-			cout << "one statement done" << endl;
+			//cout << "one statement done" << endl;
 		}
 	}
-	//cout << "All statements processde in the block" << endl;
+
 	return v;
 }
 
-
-
-Value* Interpreter::visit(ASTProgramNode* node) {
+Value* Interpreter::visit(ASTProgramNode * node) {
 	CreateFooFunction();
 	cur_block = entry;
 	Value *v =  node->getCodeBlock()->accept(this);
-	Builder->CreateRet(Builder->getInt32(0));
+	Builder->CreateRet(Builder->getInt64(0));
 	cout << "Code Generation Successfull" << endl;
 	return v;
 }
 
+Value* Interpreter::visit(ASTGotoDeclNode * node) {
+	string label = node->getLabelName();
+	ASTExpressionNode *exp = node->getExpression();
+	BasicBlock* afterb;
+	afterb = BasicBlock::Create(Context, "After goto", cur_block->getParent());
+
+	if (!exp) {
+		BasicBlock* next = labels[label];
+		Builder->CreateBr(next);
+	} else {
+		Value* v = exp->accept(this);
+		if (v->getType()	->isPointerTy()) {
+			v = Builder->CreateLoad(v);
+		}
+		BasicBlock* next = labels[label];
+
+		Builder->CreateCondBr(v, next, afterb);
+	}
+
+	//After goto
+	Builder->SetInsertPoint(afterb);
+	cur_block = afterb;
+	return Builder->getInt64(0);
 
 
-
-Value* Interpreter::visit(ASTGotoDeclNode* node) {
 	return nullptr;
 }
-Value* Interpreter::visit(ASTPrintNode *node) {
+Value* Interpreter::visit(ASTPrintNode * node) {
 
 	//cout << "into the print node" << endl;
 	list<ASTPrintLitNode*> *print_list = node->getPrintList();
@@ -145,7 +192,7 @@ Value* Interpreter::visit(ASTPrintNode *node) {
 		ASTPrintLitNode* temp = *it;
 		Value *arg = (*it)->accept(this);
 		argsV.push_back(arg);
-		if (arg->getType() == llvm::IntegerType::getInt32Ty(Context))  // It's a expression
+		if (arg->getType() == llvm::IntegerType::getInt64Ty(Context))  // It's a expression
 			to_print += "%d";
 		else
 			to_print += "%s";
@@ -164,7 +211,7 @@ Value* Interpreter::visit(ASTPrintNode *node) {
 
 	Function *printf_func = flatBToLLVM->getFunction("printf");
 	if (!printf_func) {
-		printf_func = llvm::Function::Create(llvm::FunctionType::get(llvm::IntegerType::getInt32Ty(Context), true), llvm::GlobalValue::ExternalLinkage, "printf", flatBToLLVM);
+		printf_func = llvm::Function::Create(llvm::FunctionType::get(llvm::IntegerType::getInt64Ty(Context), true), llvm::GlobalValue::ExternalLinkage, "printf", flatBToLLVM);
 		printf_func->setCallingConv(llvm::CallingConv::C);
 		llvm::AttributeSet printf_PAL;
 		printf_func->setAttributes(printf_PAL);
@@ -174,7 +221,7 @@ Value* Interpreter::visit(ASTPrintNode *node) {
 	return Builder->CreateCall(printf_func, argsV);
 }
 
-Value* Interpreter::visit(ASTPrintLitNode *node) {
+Value* Interpreter::visit(ASTPrintLitNode * node) {
 	if (node->getType()) { // It's a expression
 		//cout << "got an expression" << endl;
 		Value* v = node->getExpression()->accept(this);
@@ -195,7 +242,7 @@ Value* Interpreter::visit(ASTPrintLitNode *node) {
 		return v;
 	}
 }
-Value* Interpreter::visit(ASTBinaryExpressionNode *node) {
+Value* Interpreter::visit(ASTBinaryExpressionNode * node) {
 	Value *L = node->getLHS()->accept(this);
 	Value *R = node->getRHS()->accept(this);
 	if (!L || !R) {
@@ -224,10 +271,8 @@ Value* Interpreter::visit(ASTBinaryExpressionNode *node) {
 		return Builder->CreateAnd(L, R, "AND");
 	case _or:
 		return Builder->CreateOr(L, R, "OR");
-	case _eq: {
-		cout << "checking for equality" << endl;
+	case _eq:
 		return Builder->CreateICmpEQ(L, R, "EQ");
-	}
 	case _neq:
 		return Builder->CreateICmpNE(L, R, "NEQ");
 	case _lt:
@@ -244,13 +289,34 @@ Value* Interpreter::visit(ASTBinaryExpressionNode *node) {
 	return nullptr;
 
 }
-Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
+
+Value* Interpreter::visit(ASTUnaryExpressionNode * node) {
+	Value *R = node->getExpression()->accept(this);
+	cout << "here" << endl;
+	if (!R) {
+		return nullptr;
+	}
+	if (R->getType()->isPointerTy()) {
+		R = Builder->CreateLoad(R, "tmp");
+	}
+	int op = node->getOperatorId();
+	switch (op) {
+	case _unaryminus:
+		return Builder->CreateNeg(R, "NEG");
+	case _negate:
+		return Builder->CreateNot(R, "NOT");
+	default:
+		return ErrorV("Invalid Unary operator");
+	}
+}
+
+Value* Interpreter::visit(ASTIfStatementDeclNode * node) {
 	ASTExpressionNode *ifExp = node->getExpression();
 	ASTBlock *ifBlock = node->getIfBlock();
 	ASTBlock *elseBlock = node->getElseBlock();
 	Value *v = ifExp->accept(this);
-	Value *ifVal = Builder->getInt32(1);
-	Value *elseVal = Builder->getInt32(1);
+	Value *ifVal = Builder->getInt64(1);
+	Value *elseVal = Builder->getInt64(1);
 
 	BasicBlock *ifb, *elseb, *conb, *afterb;
 
@@ -258,8 +324,8 @@ Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
 		return nullptr;
 	}
 
-	if (v->getType()->isIntegerTy(32)) {
-		v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
+	if (v->getType()->isIntegerTy(64)) {
+		v = Builder->CreateICmpEQ(v, Builder->getInt64(1), "cmp");
 	}
 	else {
 		v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
@@ -280,8 +346,8 @@ Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
 			return nullptr;
 		}
 		if (v->getType()->isIntegerTy()) {
-			if (v->getType()->isIntegerTy(32)) {
-				v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
+			if (v->getType()->isIntegerTy(64)) {
+				v = Builder->CreateICmpEQ(v, Builder->getInt64(1), "cmp");
 			}
 			else {
 				v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
@@ -304,7 +370,7 @@ Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
 		//After Block
 		Builder->SetInsertPoint(afterb);
 		cur_block = afterb;
-		return Builder->getInt32(0);
+		return Builder->getInt64(0);
 
 
 	}
@@ -323,8 +389,8 @@ Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
 			return nullptr;
 		}
 		if (v->getType()->isIntegerTy()) {
-			if (v->getType()->isIntegerTy(32)) {
-				v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
+			if (v->getType()->isIntegerTy(64)) {
+				v = Builder->CreateICmpEQ(v, Builder->getInt64(1), "cmp");
 			}
 			else {
 				v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
@@ -341,17 +407,17 @@ Value* Interpreter::visit(ASTIfStatementDeclNode *node) {
 		//After Block
 		Builder->SetInsertPoint(afterb);
 		cur_block = afterb;
-		return Builder->getInt32(0);
+		return Builder->getInt64(0);
 	}
 
 
 
-	
+
 
 
 	return nullptr;
 }
-Value* Interpreter::visit(ASTForStatementDeclNode *node) {
+Value* Interpreter::visit(ASTForStatementDeclNode * node) {
 	ASTExpressionNode *start = node->getInitExpression();
 	ASTExpressionNode *end = node->getFinalExpression();
 	ASTExpressionNode *diff = node->getDiffExpression();
@@ -418,7 +484,7 @@ Value* Interpreter::visit(ASTForStatementDeclNode *node) {
 	//After the loop block
 	Builder->SetInsertPoint(after_block);
 	cur_block = after_block;
-	return Builder->getInt32(0);
+	return Builder->getInt64(0);
 
 
 	/*
@@ -429,9 +495,9 @@ Value* Interpreter::visit(ASTForStatementDeclNode *node) {
 		thisLoop->endExp = end;
 		loops.push(thisLoop);
 		loops.pop();
-		*/
+	*/
 }
-Value* Interpreter::visit(ASTWhileStatementDeclNode *node) {
+Value* Interpreter::visit(ASTWhileStatementDeclNode * node) {
 	cout << "into the while loop" << endl;
 	ASTExpressionNode *whileExp = node->getExpression();
 	ASTBlock *whileBlock = node->getWhileBlock();
@@ -448,8 +514,8 @@ Value* Interpreter::visit(ASTWhileStatementDeclNode *node) {
 		return nullptr;
 	}
 	if (v->getType()->isIntegerTy()) {
-		if (v->getType()->isIntegerTy(32)) {
-			v = Builder->CreateICmpEQ(v, Builder->getInt32(1), "cmp");
+		if (v->getType()->isIntegerTy(64)) {
+			v = Builder->CreateICmpEQ(v, Builder->getInt64(1), "cmp");
 		}
 		else {
 			v = Builder->CreateICmpEQ(v, Builder->getInt1(1), "cmp");
@@ -469,7 +535,7 @@ Value* Interpreter::visit(ASTWhileStatementDeclNode *node) {
 	cout << "loop block done" << endl;
 	Builder->SetInsertPoint(after_block);
 	cur_block = after_block;
-	return Builder->getInt32(0);
+	return Builder->getInt64(0);
 
 }
 Value* Interpreter::visit(ASTReadNode * node) {
@@ -480,7 +546,7 @@ Value* Interpreter::visit(ASTReadNode * node) {
 	llvm::Function *scanf_func = flatBToLLVM->getFunction("scanf");
 
 	if (!scanf_func) {
-		scanf_func = llvm::Function::Create(llvm::FunctionType::get(llvm::IntegerType::getInt32Ty(Context), true), llvm::GlobalValue::ExternalLinkage, "scanf", flatBToLLVM);
+		scanf_func = llvm::Function::Create(llvm::FunctionType::get(llvm::IntegerType::getInt64Ty(Context), true), llvm::GlobalValue::ExternalLinkage, "scanf", flatBToLLVM);
 		scanf_func->setCallingConv(llvm::CallingConv::C);
 		llvm::AttributeSet printf_PAL;
 		scanf_func->setAttributes(printf_PAL);
@@ -489,12 +555,14 @@ Value* Interpreter::visit(ASTReadNode * node) {
 	args.push_back(loc);
 	return Builder->CreateCall(scanf_func, args);
 }
+
+
 Value* Interpreter::visit(ASTStatementDeclListNode * node) {
 	return nullptr;
 }
 
 Value* Interpreter::visit(ASTBoolLiteralExpressionNode * node) {
-	cout << "returning " << node->getValue() << endl;
+	//cout << "returning " << node->getValue() << endl;
 	if (node->getValue() == true)
 		return Builder->getInt1(1);
 	return Builder->getInt1(0);
@@ -505,17 +573,47 @@ Value* Interpreter::visit(ASTLocationExpressionNode * node) {
 	return nullptr;
 }
 
+Value* Interpreter::visit(ASTLabelDeclNode * node) {
+	//cout << "here" << endl;
+	string label = node->getLabelName();
+	BasicBlock *labelb, *afterb;
+	labelb = BasicBlock::Create(Context, "label_block", cur_block->getParent());
+	afterb = BasicBlock::Create(Context, "label_block", cur_block->getParent());
+
+	labels[label] = afterb;
+
+
+	Builder->CreateBr(labelb);
+	//Label Block
+	Builder->SetInsertPoint(labelb);
+	cur_block = labelb;
+	Builder->CreateBr(afterb);
+
+	//After Block
+	Builder->SetInsertPoint(afterb);
+	cur_block = afterb;
+	return Builder->getInt64(0);
+
+}
+
+
+
+/****** Support Functions ********/
+
+
 
 Type *getLLVMType(int decafTy) {
 	switch (decafTy) {
 	case _int_:
-		return Builder->getInt32Ty();
+		return Builder->getInt64Ty();
 	case _bool_:
 		return Builder->getInt1Ty();
 	default:
 		runtime_error("Unknown Datatype");
 	}
 }
+
+
 
 void annotateSymbolTable(int datatype, list<Symbol*> *VariableList) {
 
@@ -540,8 +638,8 @@ void annotateSymbolTable(int datatype, list<Symbol*> *VariableList) {
 			var = new GlobalVariable(*flatBToLLVM, ty, false, GlobalValue::CommonLinkage,
 			                         0, sym->id_.c_str());
 			var->setAlignment(4);
-			if (ty->isIntegerTy(32)) {
-				var->setInitializer(Builder->getInt32(0));
+			if (ty->isIntegerTy(64)) {
+				var->setInitializer(Builder->getInt64(0));
 			}
 			else {
 				var->setInitializer(Builder->getInt1(0));
@@ -593,6 +691,9 @@ Value* ASTPrintLitNode::accept( Visitor * v) {
 Value* ASTBinaryExpressionNode::accept( Visitor * v) {
 	return v->visit(this);
 }
+Value* ASTUnaryExpressionNode::accept(Visitor * v) {
+	return v->visit(this);
+}
 Value* ASTIfStatementDeclNode::accept( Visitor * v) {
 	return v->visit(this);
 }
@@ -617,5 +718,9 @@ Value* ASTLocationExpressionNode::accept(Visitor * v) {
 }
 
 Value* ASTProgramNode::accept(Visitor * v) {
+	return v->visit(this);
+}
+
+Value* ASTLabelDeclNode::accept(Visitor * v) {
 	return v->visit(this);
 }
