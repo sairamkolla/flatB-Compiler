@@ -1,11 +1,13 @@
 declblock{
-	int i, sum;
-	int x, y, z;
-	int y;
-	int jar[11];
-	int k;
-	int arr[121], dasd, ar[13];
+	int a,b,c;
+	int d[5];
 }
 
 codeblock{
+	a = 5+4+5;
+	b = 6*7;
+	c = (2+3+4)*4 - 8*6/3;
+	println "sdfsd :",a;
+	a = 123;
+	println "value of a is ",a;
 }

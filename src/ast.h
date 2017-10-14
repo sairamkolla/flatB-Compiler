@@ -140,69 +140,35 @@ class ASTExpressionNode : public ASTNode {
 		exprType expr_type_;
 };
 
-class ASTVarLocationNode : public ASTNode {
+class ASTLocationNode : public ASTNode {
 	public:
-		ASTVarLocationNode(string id) : var_(id) {}
+		ASTLocationNode(string id)  {
+			var_ = id;
+			is_array_ = false;
+		}
+		ASTLocationNode(string id, ASTExpressionNode* exp){
+			var_ = id;
+			expr_ = exp;
+			is_array_ = true;
+		}
 		string getVarName() const {
 			return var_;
 		}
-		int getType(){
-			return 0;
+		bool getType(){
+			return is_array_;
 		}
-		virtual int accept(Visitor* v){
-			return v->visit(this);
-		};
-	private:
-		string var_;
-};
-
-class ASTArrayLocationNode : public ASTNode {
-	public:
-		ASTArrayLocationNode(string id, ASTExpressionNode *ex) : var_(id), expr_(ex) {}
-		const string getVarName() const {
-			return var_;
-		}
-		ASTExpressionNode *getExpression() const {
+		ASTExpressionNode* getExpression(){
 			return expr_;
 		}
-		int getType(){
-			return 1;
-		}
 		virtual int accept(Visitor* v){
 			return v->visit(this);
 		};
 	private:
 		string var_;
-		ASTExpressionNode *expr_;
-};
-
-
-
-class ASTLocationNode: public ASTNode{
-	
-	public:
-		ASTLocationNode(ASTArrayLocationNode* temp){
-			is_array_ = true;
-			arr_ = temp;
-			var_ = temp->getVarName();
-		}
-		ASTLocationNode(string temp){
-			var_ = temp;
-			is_array_ = false;
-		}
-		string getVarName(){
-			return var_;
-		}
-		ASTArrayLocationNode* getArray(){
-			return arr_;
-		}
-	private:
 		bool is_array_;
-		ASTArrayLocationNode* arr_;
-		string var_;
+		ASTExpressionNode* expr_;
+
 };
-
-
 
 class ASTIntegerLiteralExpressionNode : public ASTExpressionNode{
 	public:
@@ -235,7 +201,7 @@ class ASTBoolLiteralExpressionNode : public ASTExpressionNode {
 		bool value_;
 };
 
-/*
+
 class ASTLocationExpressionNode : public ASTExpressionNode {
 	public:
 		ASTLocationExpressionNode(ASTLocationNode *loc) : ASTExpressionNode(location) {
@@ -245,13 +211,12 @@ class ASTLocationExpressionNode : public ASTExpressionNode {
 			return location_;
 		}
 		virtual int accept(Visitor* v){
-			return v->visit(this);
+			return v->visit(location_);
 		};
 
 	private:
 		ASTLocationNode *location_;
 };
-*/
 
 
 
@@ -277,7 +242,15 @@ class ASTBinaryExpressionNode : public ASTExpressionNode{
 		int getOperatorId(){
 			return operator_;
 		}
-
+		ASTExpressionNode* getLHS(){
+			return lhs_;
+		}
+		ASTExpressionNode* getRHS(){
+			return rhs_;
+		}
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 	private:
 		ASTExpressionNode* lhs_;
 		ASTExpressionNode* rhs_;
@@ -314,17 +287,22 @@ class ASTStatementDeclNode : public ASTNode {
 class ASTStatementDeclListNode : public ASTNode{
 	public:
 		ASTStatementDeclListNode(){
-		
-		}
+			
+		};
 
 		void push(ASTStatementDeclNode* temp){
-			stmts_->push_back(temp);
+			//cout << "here finally" << endl;
+			(stmts_).push_back(temp);
+			//cout << "getting outta here!" << endl;
 		}
-		list<ASTStatementDeclNode *> *getStatementList() {
-			return stmts_;
+		list<ASTStatementDeclNode *>* getStatementList() {
+			return &stmts_;
 		}
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 	private:
-		list<ASTStatementDeclNode *> *stmts_;
+		list<ASTStatementDeclNode *> stmts_;
 };
 
 
@@ -335,6 +313,7 @@ class ASTAssignmentStatementNode : public ASTStatementDeclNode{
 			location_ = loc;
 			expr_ = expr;
 			operator_ = op;
+
 		}
 		ASTLocationNode* getLocation(){
 			return location_;
@@ -360,12 +339,15 @@ class ASTBlock : public ASTNode {
 	public:
 		ASTBlock(ASTStatementDeclListNode *temp) {
 			statementList_ = temp;
-		}
+		};
 		ASTStatementDeclListNode *getStatementList() {
 			return statementList_;
 		}
 
 		ASTStatementDeclListNode *statementList_;
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 };
 
 
@@ -539,6 +521,15 @@ class ASTPrintLitNode : public ASTNode{
 		virtual int accept(Visitor* v){
 			return v->visit(this);
 		};
+		bool getType(){
+			return isexpr_;
+		}
+		string getString(){
+			return str_lit_;
+		}
+		ASTExpressionNode* getExpression(){
+			return expr_;
+		}
 	private:
 		bool isexpr_;
 		ASTExpressionNode* expr_;
@@ -555,14 +546,20 @@ class ASTPrintNode : public ASTStatementDeclNode{
 				printNewline_ = false;
 		}
 		void push(ASTPrintLitNode* temp){
-			printList_->push_back(temp);
+			(printList_).push_back(temp);
+		}
+		bool getType(){
+			return printNewline_;
+		}
+		list<ASTPrintLitNode *>* getPrintList(){
+			return &printList_;
 		}
 		virtual int accept(Visitor* v){
 			return v->visit(this);
 		};
 	private:
 		bool printNewline_;
-		list<ASTPrintLitNode *> *printList_;
+		list<ASTPrintLitNode *> printList_;
 };
 
 
@@ -592,27 +589,88 @@ class Interpreter:public Visitor{
 		int visit(ASTIntegerLiteralExpressionNode* temp){
 			return temp->getValue();
 		}
-		int visit(ASTVarLocationNode* temp){
-			return vardict[temp->getVarName()];
-		}
-		int visit(ASTArrayLocationNode* temp){
-			int index = temp->getExpression()->accept(this);
-			string varname = temp->getVarName();
-			return arrdict[varname][index];
+		int visit(ASTLocationNode* temp){
+			///cout << "Entered location node " << endl;
+			bool type = temp->getType();
+			if (!type)
+				return vardict[temp->getVarName()];
+			else{
+				int index = temp->getExpression()->accept(this);
+				string varname = temp->getVarName();
+				return arrdict[varname][index];
+			}
 		}
 		int visit(ASTAssignmentStatementNode* temp){
+			//cout << "yo" << endl;
 			string varname = temp->getLocation()->getVarName();
 			int value = temp->getExpression()->accept(this);
 			if(var_type[var_index[varname]] == 1){ // Variable
-				vardict[varname] == value;
+				//cout << "varname " << varname << ", " << "prev : " << vardict[varname] << endl;
+				vardict[varname] = value;
+				//cout << "value : " << value << endl;
+				//cout << "varname " << varname << ", " << "pres : " << vardict[varname] << endl;
 			}else if(var_type[var_index[varname]] == 2){ //Array
-				int index = temp->getLocation()->getArray()->getExpression()->accept(this);
+				int index = temp->getLocation()->getExpression()->accept(this);
 				arrdict[varname][index] = value;
 			}
+			//cout << "assigned " << value;
 			return 0;
 		}
 		int visit(ASTBlock* temp){
-			ASTStatementDeclListNode* temp2 = temp->getStatementList();
+			list<ASTStatementDeclNode*>* stmts_list = temp->getStatementList()->getStatementList();
+			list<ASTStatementDeclNode*>::iterator it;
+
+			int no_stmts = stmts_list->size();
+			cout << "Number of statements is " <<  no_stmts << endl;
+			for(it=(*stmts_list).begin();it!=(*stmts_list).end();it++){
+				(*it)->accept(this);
+			}
+
+		}
+		int visit(ASTPrintNode *temp){
+			list<ASTPrintLitNode*>* print_list = temp->getPrintList();
+			
+			list<ASTPrintLitNode*>::reverse_iterator it;
+			int no_stmts = print_list->size();
+			
+			for(it=(*print_list).rbegin();it!=(*print_list).rend();it++){
+				if((*it)->getType()){ //It's expression
+					//cout << "Got an expression" << endl;
+					cout << (*it)->getExpression()->accept(this);
+					
+				}else{	//It's Literal
+					//cout << "Got an string literal" << endl;
+					string s = (*it)->getString();
+					s = s.substr(1, s.size()-2);
+					cout << s ;
+
+				}
+			}
+			if(temp->getType()) 
+				cout << endl;
+		}
+
+		int visit(ASTBinaryExpressionNode *temp){
+			int lhs = temp->getLHS()->accept(this);
+			int rhs = temp->getRHS()->accept(this);
+			int op = temp->getOperatorId();
+			switch(op){
+				case _plus :
+					return lhs + rhs;
+				case _minus:
+					return lhs - rhs;
+				case _mult:
+					return lhs*rhs;
+				case _div:
+					return lhs/rhs;
+				case _mod:
+					return lhs%rhs;
+				case _and:
+					return lhs && rhs;
+				case _lt:
+					return lhs < rhs;
+			}
+
 		}
 
 		

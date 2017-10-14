@@ -96,7 +96,7 @@ ASTBlock* root;
 %type <stmt>        	StatementDecl;
 %type <block>       	CodeBlock;  
 %type <stmt_list>   	StatementDecl_List;
-%type <printlit>   	printLit;
+%type <printlit>   		printLit;
 %type <printlit_list>  	Print_Statement;
 %type <printlit_list>  	printLit_list;
 %type <sym>         	VariableDecl;
@@ -106,7 +106,7 @@ ASTBlock* root;
 
 %%
 
-Program				: DECLARATION_STARTER DeclBlock CODE_STARTER CodeBlock {$$ = $4;root = $$;}
+Program				: DECLARATION_STARTER DeclBlock CODE_STARTER CodeBlock {$$ = $4;root = $$; cout << "declared the program" << endl;}
 					;
 
 DeclBlock			: '{' DeclList '}' {}
@@ -146,8 +146,8 @@ VariableDecl 		: ID {
 /* Grammer for CodeBlock */
 
 // Basic Definitions
-Location 	 		: ID {cout << *($1) << endl;}
-					| ID '[' Expr ']'{} 
+Location 	 		: ID { $$ = new ASTLocationNode(*($1));}
+					| ID '[' Expr ']'{ $$ = new ASTLocationNode(*($1),$3);} 
 					;
 
 IntegerLiteral 		: DEC_LITERAL { $$ = new ASTIntegerLiteralExpressionNode($1) ; }
@@ -159,11 +159,11 @@ BoolLiteral			: TRUE
 					;
 
 
-CodeBlock			: '{' StatementDecl_List '}' {$$ = new ASTBlock($2);}
+CodeBlock			: '{' StatementDecl_List '}' {$$ = new ASTBlock($2);cout << "declared the codeblock" << endl;}
 					| '{' '}'	
 					;
 
-StatementDecl_List	: StatementDecl { $$ = new ASTStatementDeclListNode(); $$->push($1);}
+StatementDecl_List	: StatementDecl { $$ = new ASTStatementDeclListNode();$$->push($1);}
 					| StatementDecl_List StatementDecl {$$ = $1; $$->push($2);}
 					;
 
@@ -186,29 +186,29 @@ StatementDecl		: Print_Statement ';' {$$ = $1;}
 Label				: ID
 					;
 
-Expr 				: Location
+Expr 				: Location {$$=new ASTLocationExpressionNode($1);}
 					| IntegerLiteral {$$ = $1;}
 					| MINUS Expr %prec UNARY
 					| NOT Expr
 					| BoolLiteral
-					| '(' Expr ')'
-					| BinExpr					
+					| '(' Expr ')' { $$ = $2;}
+					| BinExpr	{ $$ = $1;}			
 					;
 /** DIFFERENT TYPE OF EXPRESSIONS **/
 /* Bin expr is grammer which denotes Non boolean expressions */
-BinExpr				: Expr MULT Expr
-					| Expr DIV Expr
-					| Expr MOD Expr
-					| Expr PLUS Expr
-					| Expr MINUS Expr
-					| Expr AND Expr
-					| Expr OR Expr
-					| Expr GT Expr
-					| Expr GTEQ Expr
-					| Expr EQ Expr
-					| Expr NEQ Expr
-					| Expr LT Expr
-					| Expr LTEQ Expr
+BinExpr				: Expr MULT Expr	{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr DIV Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr MOD Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr PLUS Expr	{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr MINUS Expr	{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr AND Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr OR Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr GT Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr GTEQ Expr	{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr EQ Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr NEQ Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr LT Expr		{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
+					| Expr LTEQ Expr	{$$ = new ASTBinaryExpressionNode($1,*($2),$3);}
 					;
 
 /* Const Expr is grammer for expressions which don't involve variables, Used during declarations */
@@ -329,6 +329,5 @@ int main(int argc, char *argv[]){
 	//temp->test();
 	yyparse();
 	Interpreter* interpreter = new Interpreter();
-    /* cout << CB << endl; */
     root->accept(interpreter);
 }
