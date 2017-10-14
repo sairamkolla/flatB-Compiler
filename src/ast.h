@@ -54,7 +54,7 @@ class ASTBlock;
 class ASTProgramNode;
 class ASTIfStatementDeclNode;
 class ASTForStatementDeclNode;
-class ASTWhileStatementNode;
+class ASTWhileStatementDeclNode;
 class ASTLabelDeclNode;
 class ASTGotoDeclNode;
 class ASTPrintLitNode;
@@ -83,7 +83,7 @@ class Visitor{
 		virtual int visit(ASTProgramNode* temp){}
 		virtual int visit(ASTIfStatementDeclNode* temp){}
 		virtual int visit(ASTForStatementDeclNode* temp){}
-		virtual int visit(ASTWhileStatementNode* temp){}
+		virtual int visit(ASTWhileStatementDeclNode* temp){}
 		virtual int visit(ASTLabelDeclNode* temp){}
 		virtual int visit(ASTGotoDeclNode* temp){}
 		virtual int visit(ASTPrintLitNode* temp){}
@@ -187,8 +187,11 @@ class ASTIntegerLiteralExpressionNode : public ASTExpressionNode{
 
 class ASTBoolLiteralExpressionNode : public ASTExpressionNode {
 	public:
-		ASTBoolLiteralExpressionNode(bool val) : ASTExpressionNode(literal) {
-			value_ = val;
+		ASTBoolLiteralExpressionNode(string val) : ASTExpressionNode(literal) {
+			if(val == "true")
+				value_ = true;
+			else
+				value_ = false;
 		}
 		bool getValue() const {
 			return value_;
@@ -369,8 +372,17 @@ class ASTIfStatementDeclNode : public ASTStatementDeclNode {
 			ifExpression_ = ifExp;
 			ifBlock_ = ifBlock;
 			elseBlock_ = elseBlock;
+			else_exists_ = true;
 		}
-		ASTExpressionNode *getIfExpression() const {
+		ASTIfStatementDeclNode(ASTExpressionNode *ifExp, ASTBlock *ifBlock) : ASTStatementDeclNode(if_statement) {
+			ifExpression_ = ifExp;
+			ifBlock_ = ifBlock;
+			else_exists_ = false;
+		}
+		bool getType(){
+			return else_exists_;
+		}
+		ASTExpressionNode *getExpression() const {
 			return ifExpression_;
 		}
 		ASTBlock *getIfBlock() const {
@@ -379,8 +391,12 @@ class ASTIfStatementDeclNode : public ASTStatementDeclNode {
 		ASTBlock *getElseBlock() const {
 			return elseBlock_;
 		}
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 
 	private:
+		bool else_exists_;
 		ASTExpressionNode *ifExpression_;
 		ASTBlock *ifBlock_;
 		ASTBlock *elseBlock_;
@@ -388,13 +404,21 @@ class ASTIfStatementDeclNode : public ASTStatementDeclNode {
 
 class ASTForStatementDeclNode : public ASTStatementDeclNode {
 	public:
-		ASTForStatementDeclNode(string it, ASTExpressionNode *start, ASTExpressionNode *end, int d,ASTBlock *b) : ASTStatementDeclNode(for_statement) {
+		ASTForStatementDeclNode(string it, ASTExpressionNode *start, ASTExpressionNode *step, ASTExpressionNode *end,ASTBlock *b) : ASTStatementDeclNode(for_statement) {
 			iterName_ = it;
 			initExpression_ = start;
 			finalExpression_ = end;
 			block_ = b;
-			stepSize_ = d;
+			stepSize_ = step;
 		}
+		ASTForStatementDeclNode(string it, ASTExpressionNode *start, ASTExpressionNode *end,ASTBlock *b) : ASTStatementDeclNode(for_statement) {
+			iterName_ = it;
+			initExpression_ = start;
+			finalExpression_ = end;
+			block_ = b;
+			stepSize_ = new ASTIntegerLiteralExpressionNode(1);
+		}
+		
 		const string getIterVarName() const {
 			return iterName_;
 		}
@@ -404,30 +428,39 @@ class ASTForStatementDeclNode : public ASTStatementDeclNode {
 		ASTExpressionNode *getFinalExpression() const {
 			return finalExpression_;
 		}
+		ASTExpressionNode* getDiffExpression(){
+			return stepSize_;
+		}
 		ASTBlock *getForBody() {
 			return block_;
 		}
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 
 	private:
 		string iterName_;
 		ASTExpressionNode *initExpression_;
 		ASTExpressionNode *finalExpression_;
-		int stepSize_;
+		ASTExpressionNode *stepSize_;
 		ASTBlock *block_;
 };
 
-class ASTWhileStatementNode : public ASTStatementDeclNode {
+class ASTWhileStatementDeclNode : public ASTStatementDeclNode {
 	public:
-		ASTWhileStatementNode(ASTExpressionNode *e, ASTBlock* b): ASTStatementDeclNode(while_statement) {
+		ASTWhileStatementDeclNode(ASTExpressionNode *e, ASTBlock* b): ASTStatementDeclNode(while_statement) {
 			block_ = b;
 			expr_ = e;
 		}
 		ASTExpressionNode* getExpression(){
 			return expr_;
 		}
-		ASTBlock* getBlock(){
+		ASTBlock* getWhileBlock(){
 			return block_;
 		}
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 
 	private:
 		ASTBlock* block_;
@@ -621,7 +654,6 @@ class Interpreter:public Visitor{
 			list<ASTStatementDeclNode*>::iterator it;
 
 			int no_stmts = stmts_list->size();
-			cout << "Number of statements is " <<  no_stmts << endl;
 			for(it=(*stmts_list).begin();it!=(*stmts_list).end();it++){
 				(*it)->accept(this);
 			}
@@ -667,13 +699,67 @@ class Interpreter:public Visitor{
 					return lhs%rhs;
 				case _and:
 					return lhs && rhs;
+				case _or:
+					return lhs || rhs;
 				case _lt:
 					return lhs < rhs;
+				case _lteq:
+					return lhs <= rhs;
+				case _gt:
+					return lhs > rhs;
+				case _gteq:
+					return lhs >= rhs;
+				case _eq:
+					return lhs == rhs;
+				case _neq:
+					return lhs != rhs;
+							
+
 			}
 
 		}
 
-		
+		int visit(ASTIfStatementDeclNode *temp){
+			int expr_value = temp->getExpression()->accept(this);
+			if(expr_value){
+				temp->getIfBlock()->accept(this);
+			}else{
+				if(temp->getType())
+					temp->getElseBlock()->accept(this);	
+			}
+		}
+
+		int visit(ASTForStatementDeclNode *temp){
+			string iter = temp->getIterVarName();
+			int start = temp->getInitExpression()->accept(this);
+			vardict[iter] = start;
+			while(vardict[iter] <= temp->getFinalExpression()->accept(this)){
+				temp->getForBody()->accept(this);
+				int diff = temp->getDiffExpression()->accept(this);
+				vardict[iter] = vardict[iter] + diff;
+			}
+			return 0;
+		}
+
+		int visit(ASTWhileStatementDeclNode *temp){
+			while(temp->getExpression()->accept(this)){
+				temp->getWhileBlock()->accept(this);
+			}
+			return 0;
+		}
+		int visit(ASTReadNode* temp){
+			ASTLocationNode* loc = temp->getLocation();
+			int temp2;
+			cin >> temp2;
+			string varname = loc->getVarName();
+			if(loc->getType()) {//array
+				int index = loc->getExpression()->accept(this);
+				arrdict[varname][index] = temp2;
+			}else{
+				vardict[varname] = temp2;
+			}
+			return 0;
+		}
 
 };
 

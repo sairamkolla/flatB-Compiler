@@ -6,8 +6,18 @@ declblock{
 codeblock{
 	a = 5+4+5;
 	b = 6*7;
-	c = (2+3+4)*4 - 8*6/3;
-	println "sdfsd :",a;
-	a = 123;
+	if(a>4){
+		a = a+10;
+	}
 	println "value of a is ",a;
+	for i=1,2,10{
+		a = a+1;
+		println "value of a is ",a;
+	
+	}
+	while(a>20){
+	a = a-1;
+	read a;
+	println "value of a is ",a;
+	}
 }

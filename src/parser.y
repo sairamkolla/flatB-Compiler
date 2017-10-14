@@ -68,6 +68,8 @@ ASTBlock* root;
 %type 	<intVal>	HEX_LITERAL
 %type 	<strVal>	STR_LITERAL
 %type 	<strVal>	CODE_STARTER
+%type 	<strVal> 	TRUE
+%type 	<strVal> 	FALSE
 %type 	<strVal>	DECLARATION_STARTER
 %type 	<strVal> 	PRINT
 %type 	<strVal> 	PRINTLN
@@ -154,8 +156,8 @@ IntegerLiteral 		: DEC_LITERAL { $$ = new ASTIntegerLiteralExpressionNode($1) ; 
 					| HEX_LITERAL { $$ = new ASTIntegerLiteralExpressionNode($1) ; }
 					;
 
-BoolLiteral			: TRUE
-					| FALSE
+BoolLiteral			: TRUE { $$ = new ASTBoolLiteralExpressionNode(*($1));}
+					| FALSE{ $$ = new ASTBoolLiteralExpressionNode(*($1));}
 					;
 
 
@@ -172,15 +174,15 @@ StatementDecl		: Print_Statement ';' {$$ = $1;}
 					| Location ASSIGN Expr ';' {$$ = new ASTAssignmentStatementNode($1,$3,*($2));}
 					//| FOR ID ASSIGN ConstExpr ',' ConstExpr CodeBlock
 					//| FOR ID ASSIGN ConstExpr ','  ConstExpr ',' ConstExpr CodeBlock
-					| FOR ID ASSIGN IntegerLiteral ',' IntegerLiteral CodeBlock
-					| FOR ID ASSIGN IntegerLiteral ','  IntegerLiteral ',' IntegerLiteral CodeBlock
-					| IF Expr CodeBlock
-					| IF Expr CodeBlock ELSE  CodeBlock
-					| WHILE Expr CodeBlock
+					| FOR ID ASSIGN Expr ',' Expr CodeBlock {$$ = new ASTForStatementDeclNode(*($2),$4,$6,$7);}
+					| FOR ID ASSIGN Expr ','  Expr ',' Expr CodeBlock {$$ = new ASTForStatementDeclNode(*($2),$4,$6,$8,$9);}
+					| IF Expr CodeBlock {$$ = new ASTIfStatementDeclNode($2,$3);}
+					| IF Expr CodeBlock ELSE  CodeBlock {$$ = new ASTIfStatementDeclNode($2,$3,$5);}
+					| WHILE Expr CodeBlock {$$ = new ASTWhileStatementDeclNode($2,$3);}
 					| Label ':' StatementDecl
 					| GOTO Label ';'
 					| GOTO Label IF Expr ';'
-					| READ Location
+					| READ Location ';'{$$ = new ASTReadNode($2);}
 					;
 
 Label				: ID
@@ -190,7 +192,7 @@ Expr 				: Location {$$=new ASTLocationExpressionNode($1);}
 					| IntegerLiteral {$$ = $1;}
 					| MINUS Expr %prec UNARY
 					| NOT Expr
-					| BoolLiteral
+					| BoolLiteral {$$ = $1;}
 					| '(' Expr ')' { $$ = $2;}
 					| BinExpr	{ $$ = $1;}			
 					;
