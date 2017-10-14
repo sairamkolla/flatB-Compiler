@@ -4,13 +4,42 @@
 extern FILE *yyin;
 void yyerror(string s);
 int yylex(void);
+using namespace std;
+int var_type[9999];
+unordered_map<string,int> var_index;
+unordered_map<string,int> vardict;
+unordered_map<string,int*> arrdict;
+bool CheckAvail(string s);
+bool CheckAvail(string s);
+void update_var_value(string s,int value);
+void update_arr_value(string s, int index,int value);
+int getType(string s);
+void insert_var(string s);
+void insert_arr(string s,int size);
+void insert_label(string s);
+ASTBlock* root;
 %}
 
-%union{
+%union
+{
     int     intVal;
     string  *strVal;
 
-
+    ASTProgramNode*						prog;
+    ASTExpressionNode*                  expr;       
+    ASTLocationNode*                    loc;    
+    ASTIntegerLiteralExpressionNode*    intLit;                     
+    ASTBoolLiteralExpressionNode*       boolLit;                    
+    ASTBinaryExpressionNode*            binexpr;                
+    ASTUnaryExpressionNode*             unexpr;         
+    ASTStatementDeclNode*               stmt;           
+    ASTBlock*                           block;
+    //ASTParameterDecl*                 param;
+    //list<ASTParameterDecl *>          param_list;
+    ASTStatementDeclListNode*	        stmt_list;
+    Symbol*                             sym;
+    ASTPrintLitNode*                    printlit;
+    ASTPrintNode*						printlit_list;					
 }
 
 
@@ -38,6 +67,10 @@ int yylex(void);
 %type 	<intVal>	DEC_LITERAL
 %type 	<intVal>	HEX_LITERAL
 %type 	<strVal>	STR_LITERAL
+%type 	<strVal>	CODE_STARTER
+%type 	<strVal>	DECLARATION_STARTER
+%type 	<strVal> 	PRINT
+%type 	<strVal> 	PRINTLN
 %type 	<strVal>	ASSIGN
 %type 	<strVal>	MINUS
 %type 	<strVal>	NOT
@@ -54,14 +87,29 @@ int yylex(void);
 %type 	<strVal>	GTEQ
 %type 	<strVal>	LTEQ
 
+%type <block>			Program;
+%type <expr>        	Expr;
+%type <loc>         	Location;
+%type <intLit>      	IntegerLiteral;
+%type <boolLit>     	BoolLiteral;
+%type <binexpr>     	BinExpr;
+%type <stmt>        	StatementDecl;
+%type <block>       	CodeBlock;  
+%type <stmt_list>   	StatementDecl_List;
+%type <printlit>   	printLit;
+%type <printlit_list>  	Print_Statement;
+%type <printlit_list>  	printLit_list;
+%type <sym>         	VariableDecl;
+
+
 
 
 %%
 
-Program				: DECLARATION_STARTER DeclBlock CODE_STARTER CodeBlock
+Program				: DECLARATION_STARTER DeclBlock CODE_STARTER CodeBlock {$$ = $4;root = $$;}
 					;
 
-DeclBlock			: '{' DeclList '}' 
+DeclBlock			: '{' DeclList '}' {}
 					| '{' '}' 
 					;
 /* Grammer for Declaration block, only constant expr are allowed herer */
@@ -76,18 +124,34 @@ VariableDecl_List	: VariableDecl
 					| VariableDecl_List ',' VariableDecl
 					;
 
-VariableDecl 		: ID
-					| ID '[' IntegerLiteral ']' 
+VariableDecl 		: ID {
+						bool x = CheckAvail(*($1));
+						if(x){
+							insert_var(*($1));
+						}
+						else{
+							cout << "Redeclaration of " << *($1)  << endl;
+						}
+					}
+					| ID '[' IntegerLiteral ']' {
+						bool x = CheckAvail(*($1));
+						if(x){
+							insert_arr(*($1),$3->getValue());
+						}
+						else{
+							cout << "Redeclaration of " << *($1)  << endl;
+						}	
+					} 
 					;
 /* Grammer for CodeBlock */
 
 // Basic Definitions
-Location 	 		: ID
-					| ID '[' Expr ']' 
+Location 	 		: ID {cout << *($1) << endl;}
+					| ID '[' Expr ']'{} 
 					;
 
-IntegerLiteral 		: DEC_LITERAL
-					| HEX_LITERAL
+IntegerLiteral 		: DEC_LITERAL { $$ = new ASTIntegerLiteralExpressionNode($1) ; }
+					| HEX_LITERAL { $$ = new ASTIntegerLiteralExpressionNode($1) ; }
 					;
 
 BoolLiteral			: TRUE
@@ -95,17 +159,17 @@ BoolLiteral			: TRUE
 					;
 
 
-CodeBlock			: '{' StatementList '}' 
-					| '{' '}'
+CodeBlock			: '{' StatementDecl_List '}' {$$ = new ASTBlock($2);}
+					| '{' '}'	
 					;
 
-StatementList		: StatementDecl 
-					| StatementList StatementDecl
+StatementDecl_List	: StatementDecl { $$ = new ASTStatementDeclListNode(); $$->push($1);}
+					| StatementDecl_List StatementDecl {$$ = $1; $$->push($2);}
 					;
 
 
-StatementDecl		: IO_Statement ';'
-					| Location ASSIGN Expr ';'
+StatementDecl		: Print_Statement ';' {$$ = $1;}
+					| Location ASSIGN Expr ';' {$$ = new ASTAssignmentStatementNode($1,$3,*($2));}
 					//| FOR ID ASSIGN ConstExpr ',' ConstExpr CodeBlock
 					//| FOR ID ASSIGN ConstExpr ','  ConstExpr ',' ConstExpr CodeBlock
 					| FOR ID ASSIGN IntegerLiteral ',' IntegerLiteral CodeBlock
@@ -116,13 +180,14 @@ StatementDecl		: IO_Statement ';'
 					| Label ':' StatementDecl
 					| GOTO Label ';'
 					| GOTO Label IF Expr ';'
+					| READ Location
 					;
 
 Label				: ID
 					;
 
 Expr 				: Location
-					| IntegerLiteral
+					| IntegerLiteral {$$ = $1;}
 					| MINUS Expr %prec UNARY
 					| NOT Expr
 					| BoolLiteral
@@ -159,24 +224,86 @@ ConstExpr			: '(' ConstExpr ')'
 					;
 */
 
-IO_Statement		: PRINTLN print_list 
-					| PRINT print_list 
-					| READ Location 
+Print_Statement		: PRINTLN printLit_list {$$ = $2; $$->setType(*($1));}
+					| PRINT printLit_list {$$ = $2; $$->setType(*($1));}
 					;
 
 
-print_list			: print_lit
-					| print_lit ',' print_list
+printLit_list		: printLit {$$ = new ASTPrintNode(); $$->push($1);}
+					| printLit ',' printLit_list {$$ = $3;$$->push($1);}
 					;
 
-print_lit			: Expr
-					| STR_LITERAL
+printLit			: Expr { $$ = new ASTPrintLitNode($1);}
+					| STR_LITERAL { $$ = new ASTPrintLitNode(*($1));}
 					;
 
 
 
 
 %%
+
+bool CheckAvail(string s){
+	/*
+	unordered_map<string,int> var_index;
+	unordered_map<string,int> vardict;
+	unordered_map<string,int*> arrdict;
+	int var_type[9999];
+	*/
+	unordered_map<string,int>::const_iterator got = var_index.find (s);
+	if(var_index.size()==0)
+		return true;
+	if(got == var_index.end())
+		return true;
+	return false;
+}
+
+void update_var_value(string s,int value){
+	vardict[s] = value;
+}
+
+void update_arr_value(string s, int index,int value){
+	//unordered_map<string,int>::const_iterator got = var_index.find (s);
+	//(got->second)[index] = value;
+	arrdict[s][index] = value;
+}
+
+int getType(string s){
+	unordered_map<string,int>::const_iterator got = var_index.find (s);
+	return var_type[got->second];
+}
+
+void insert_var(string s){
+	/*
+	1 - VARIABLE
+	2 - ARRAY
+	3 - LABEL
+	*/
+	int temp1 = vardict.size();
+	temp1 += arrdict.size();	
+	var_type[temp1] = 1;
+	var_index[s] = temp1;
+	vardict[s] = 0;
+	cout << "Added variable " << s << endl;
+}
+
+void insert_arr(string s,int size){
+	int temp1 = vardict.size();
+	temp1 += arrdict.size();	
+	var_type[temp1] = 2;
+	var_index[s] = temp1;
+	arrdict[s] = new int[size];
+	cout << "Added array " << s << " of size " << size << endl;
+
+}
+
+void insert_label(string s){
+	int temp1 = vardict.size();
+	temp1 += arrdict.size();	
+	var_type[temp1] = 3;
+	var_index[s] = temp1;
+	vardict[s] = 0;
+}
+
 
 
 void yyerror (string s){
@@ -198,5 +325,10 @@ int main(int argc, char *argv[]){
 	}
 	yyin = fopen(argv[1], "r");
 	cout << "Parsing started for " << argv[1] << endl;
+	//ASTNode* temp = new ASTNode();
+	//temp->test();
 	yyparse();
+	Interpreter* interpreter = new Interpreter();
+    /* cout << CB << endl; */
+    root->accept(interpreter);
 }

@@ -1,11 +1,14 @@
 %{
 #include "head.h"
+#include "ast.h"
 #include "parser.tab.h"
 void yyerror(string s);
 %}
 
 
 %option yylineno
+%option noyywrap
+
 
 SINGLE_QUOTES 			"\'"
 DOUBLE_QUOTES 			"\""
