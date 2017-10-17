@@ -1,7 +1,6 @@
-{
-	declaration_list
+declblock{
 }
 
-{
-	statement_list
+codeblock{
+
 }

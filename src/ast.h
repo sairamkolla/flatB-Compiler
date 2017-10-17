@@ -280,6 +280,12 @@ class ASTStatementDeclNode : public ASTNode {
 	public:
 		ASTStatementDeclNode(statementType id) : statementId_(id) {}
 		ASTStatementDeclNode() : statementId_(default_statement){}
+		virtual statementType get_stmt_type(){
+			return statementId_;
+		}
+		virtual string get_label_name(){
+            return "None";
+        };
 		virtual int accept(Visitor* v){
 			return v->visit(this);
 		};
@@ -342,6 +348,9 @@ class ASTBlock : public ASTNode {
 	public:
 		ASTBlock(ASTStatementDeclListNode *temp) {
 			statementList_ = temp;
+		};
+		ASTBlock() {
+			statementList_ = NULL;
 		};
 		ASTStatementDeclListNode *getStatementList() {
 			return statementList_;
@@ -472,26 +481,37 @@ class ASTLabelDeclNode : public ASTStatementDeclNode {
 		ASTLabelDeclNode(string l) : ASTStatementDeclNode(label_statement) {
 			labelName_ = l;
 		}
-
+		virtual string get_label_name(){
+			return labelName_;
+		}
 	private:
 		string labelName_;
+		int stmt_n0;
 };
 
 class ASTGotoDeclNode : public ASTStatementDeclNode {
 	public:
-		ASTGotoDeclNode(ASTLabelDeclNode* l,ASTExpressionNode* cond): ASTStatementDeclNode(goto_statement){
+		ASTGotoDeclNode(string l,ASTExpressionNode* cond): ASTStatementDeclNode(goto_statement){
+			
 			label_ = l;
 			condition_ = cond;
 		}
-		ASTLabelDeclNode* getLabel(){
+		ASTGotoDeclNode(string l): ASTStatementDeclNode(goto_statement){
+			label_ = l;
+			condition_ = NULL;
+		}
+		virtual string get_label_name(){
 			return label_;
 		}
 		ASTExpressionNode* getExpression(){
 			return condition_;
 		}
+		virtual int accept(Visitor* v){
+			return v->visit(this);
+		};
 
 	private:
-		ASTLabelDeclNode* label_;
+		string label_;
 		ASTExpressionNode* condition_;
 };
 
@@ -650,14 +670,40 @@ class Interpreter:public Visitor{
 			return 0;
 		}
 		int visit(ASTBlock* temp){
+			if(temp->getStatementList() == NULL)
+				return 0;
 			list<ASTStatementDeclNode*>* stmts_list = temp->getStatementList()->getStatementList();
 			list<ASTStatementDeclNode*>::iterator it;
 
 			int no_stmts = stmts_list->size();
+			int i=0;
 			for(it=(*stmts_list).begin();it!=(*stmts_list).end();it++){
+				if((*it)->get_stmt_type() == label_statement){vardict[(*it)->get_label_name()] = i;}
+				i++;
+			}
+			for(it=(*stmts_list).begin();it!=(*stmts_list).end();it++){
+				if((*it)->get_stmt_type() == goto_statement){
+					int result = (*it)->accept(this);
+					if(result)
+						std::advance(it, vardict[(*it)->get_label_name()]);
+				}
 				(*it)->accept(this);
 			}
+			/*for(it=(*stmts_list).begin();it!=(*stmts_list).end();it++){
+				if((*it)->get_stmt_type() == label_statement){
+					cout << "label encountered" << endl;
+				}
+				(*it)->accept(this);
+			}*/
 
+		}
+		int visit(ASTGotoDeclNode* temp){
+			if(temp->getExpression() == NULL)
+				return 1;
+			int index = temp->getExpression()->accept(this);
+			if(index)
+				return 1;
+			return 0;
 		}
 		int visit(ASTPrintNode *temp){
 			list<ASTPrintLitNode*>* print_list = temp->getPrintList();

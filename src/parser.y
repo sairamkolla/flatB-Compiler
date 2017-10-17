@@ -39,7 +39,8 @@ ASTBlock* root;
     ASTStatementDeclListNode*	        stmt_list;
     Symbol*                             sym;
     ASTPrintLitNode*                    printlit;
-    ASTPrintNode*						printlit_list;					
+    ASTPrintNode*						printlit_list;
+    ASTLabelDeclNode*					label_decl;					
 }
 
 
@@ -102,7 +103,7 @@ ASTBlock* root;
 %type <printlit_list>  	Print_Statement;
 %type <printlit_list>  	printLit_list;
 %type <sym>         	VariableDecl;
-
+%type <label_decl>		Label;
 
 
 
@@ -162,7 +163,7 @@ BoolLiteral			: TRUE { $$ = new ASTBoolLiteralExpressionNode(*($1));}
 
 
 CodeBlock			: '{' StatementDecl_List '}' {$$ = new ASTBlock($2);cout << "declared the codeblock" << endl;}
-					| '{' '}'	
+					| '{' '}'	{$$ = new ASTBlock();}
 					;
 
 StatementDecl_List	: StatementDecl { $$ = new ASTStatementDeclListNode();$$->push($1);}
@@ -179,13 +180,21 @@ StatementDecl		: Print_Statement ';' {$$ = $1;}
 					| IF Expr CodeBlock {$$ = new ASTIfStatementDeclNode($2,$3);}
 					| IF Expr CodeBlock ELSE  CodeBlock {$$ = new ASTIfStatementDeclNode($2,$3,$5);}
 					| WHILE Expr CodeBlock {$$ = new ASTWhileStatementDeclNode($2,$3);}
-					| Label ':' StatementDecl
-					| GOTO Label ';'
-					| GOTO Label IF Expr ';'
+					| Label ':' 
+					| GOTO Label ';' { $$ = new ASTGotoDeclNode($2->get_label_name());}
+					| GOTO Label IF Expr ';' {$$ = new ASTGotoDeclNode($2->get_label_name(),$4);}
 					| READ Location ';'{$$ = new ASTReadNode($2);}
 					;
 
-Label				: ID
+Label				: ID { 
+						bool x = CheckAvail(*($1));
+						if(x){
+							vardict[*($1)] = 0;
+							$$ = new class ASTLabelDeclNode(*($1));
+						}else{
+							cout << " Redeclaration of label " << *($1) << endl;
+						}
+					}
 					;
 
 Expr 				: Location {$$=new ASTLocationExpressionNode($1);}
