@@ -1,17 +1,26 @@
 declblock{
-	int i, sum;
-	int x, y, z;
-	int y;
-	int jar[11];
-	int k;
-	int arr[121], dasd, ar[13];
+	int i, n,a,b,c;
 }
 
 codeblock{
-	print a, b, c;
-	println a, b, c;
-	print "asdasdasdasdas","dfsdfsd",a,b,c;
-	print a[a[i]]*b,c;
-	read i;
-	read x[i];
+	read n;
+	a = 1;
+	b = 1;
+	if(n>=1){
+		println a;
+	}
+	if(n>=2){
+		println b;
+	}
+	n = n-2;
+	while(n>0){
+	
+		c = a + b;
+		a = b;
+		b = c;
+		println b;
+		n = n-1;
+	}
+	
+
 }

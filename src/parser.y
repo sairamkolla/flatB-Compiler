@@ -5,19 +5,9 @@ extern FILE *yyin;
 void yyerror(string s);
 int yylex(void);
 using namespace std;
-int var_type[9999];
-unordered_map<string,int> var_index;
-unordered_map<string,int> vardict;
-unordered_map<string,int*> arrdict;
-bool CheckAvail(string s);
-bool CheckAvail(string s);
-void update_var_value(string s,int value);
-void update_arr_value(string s, int index,int value);
-int getType(string s);
-void insert_var(string s);
-void insert_arr(string s,int size);
-void insert_label(string s);
-ASTBlock* root;
+ASTProgramNode* root;
+extern Module *flatBToLLVM;
+extern IRBuilder<> *Builder;
 %}
 
 %union
@@ -34,13 +24,21 @@ ASTBlock* root;
     ASTUnaryExpressionNode*             unexpr;         
     ASTStatementDeclNode*               stmt;           
     ASTBlock*                           block;
-    //ASTParameterDecl*                 param;
-    //list<ASTParameterDecl *>          param_list;
     ASTStatementDeclListNode*	        stmt_list;
-    Symbol*                             sym;
     ASTPrintLitNode*                    printlit;
     ASTPrintNode*						printlit_list;
-    ASTLabelDeclNode*					label_decl;					
+    ASTLabelDeclNode*					label_decl;		
+    Symbol* 							sym;
+    list<Symbol*>* 						sym_list;
+
+    /*
+    ASTParameterDecl* 					param_decl;
+
+    ASTParameterDecl* 					param_decl;
+	ASTParameterDeclListNode* 			param_decl_list;
+	ASTDeclBlockNode* 					declblock;
+	*/
+
 }
 
 
@@ -90,7 +88,7 @@ ASTBlock* root;
 %type 	<strVal>	GTEQ
 %type 	<strVal>	LTEQ
 
-%type <block>			Program;
+%type <prog>			Program;
 %type <expr>        	Expr;
 %type <loc>         	Location;
 %type <intLit>      	IntegerLiteral;
@@ -102,49 +100,42 @@ ASTBlock* root;
 %type <printlit>   		printLit;
 %type <printlit_list>  	Print_Statement;
 %type <printlit_list>  	printLit_list;
-%type <sym>         	VariableDecl;
 %type <label_decl>		Label;
+%type <sym>				VariableDecl;
+%type <intVal> 			Type;
+
+%type <sym_list> 		VariableDecl_List;
+
+
+
+
 
 
 
 %%
 
-Program				: DECLARATION_STARTER DeclBlock CODE_STARTER CodeBlock {$$ = $4;root = $$; cout << "declared the program" << endl;}
+Program				: DECLARATION_STARTER DeclBlock CODE_STARTER CodeBlock {$$ = new ASTProgramNode($4); root = $$;}
 					;
 
-DeclBlock			: '{' DeclList '}' {}
+DeclBlock			: '{' DeclList '}' 
 					| '{' '}' 
 					;
 /* Grammer for Declaration block, only constant expr are allowed herer */
-DeclList			: DeclList DeclLine
-					| DeclLine
+DeclList			: DeclList DeclLine 
+					| DeclLine 
 					;
 
-DeclLine			: DATA_TYPE VariableDecl_List ';' 
+DeclLine			: Type VariableDecl_List ';' {annotateSymbolTable($1,$2);}
 					;
 
-VariableDecl_List	: VariableDecl 
-					| VariableDecl_List ',' VariableDecl
+Type 				: DATA_TYPE { if(!($1->compare("int"))) $$ = _int_; else $$ = _bool_;} 
+
+VariableDecl_List	: VariableDecl {$$ = new list<Symbol*>(); $$->push_back($1);}
+					| VariableDecl_List ',' VariableDecl {$$ = $1; $$->push_back($3);}
 					;
 
-VariableDecl 		: ID {
-						bool x = CheckAvail(*($1));
-						if(x){
-							insert_var(*($1));
-						}
-						else{
-							cout << "Redeclaration of " << *($1)  << endl;
-						}
-					}
-					| ID '[' IntegerLiteral ']' {
-						bool x = CheckAvail(*($1));
-						if(x){
-							insert_arr(*($1),$3->getValue());
-						}
-						else{
-							cout << "Redeclaration of " << *($1)  << endl;
-						}	
-					} 
+VariableDecl 		: ID { $$ = new Symbol(*($1));}
+					| ID '[' IntegerLiteral ']' {$$ = new Symbol(*($1),$3);} 
 					;
 /* Grammer for CodeBlock */
 
@@ -162,7 +153,7 @@ BoolLiteral			: TRUE { $$ = new ASTBoolLiteralExpressionNode(*($1));}
 					;
 
 
-CodeBlock			: '{' StatementDecl_List '}' {$$ = new ASTBlock($2);cout << "declared the codeblock" << endl;}
+CodeBlock			: '{' StatementDecl_List '}' {$$ = new ASTBlock($2);}
 					| '{' '}'	{$$ = new ASTBlock();}
 					;
 
@@ -186,15 +177,7 @@ StatementDecl		: Print_Statement ';' {$$ = $1;}
 					| READ Location ';'{$$ = new ASTReadNode($2);}
 					;
 
-Label				: ID { 
-						bool x = CheckAvail(*($1));
-						if(x){
-							vardict[*($1)] = 0;
-							$$ = new class ASTLabelDeclNode(*($1));
-						}else{
-							cout << " Redeclaration of label " << *($1) << endl;
-						}
-					}
+Label				: ID { 	}
 					;
 
 Expr 				: Location {$$=new ASTLocationExpressionNode($1);}
@@ -253,69 +236,6 @@ printLit			: Expr { $$ = new ASTPrintLitNode($1);}
 
 %%
 
-bool CheckAvail(string s){
-	/*
-	unordered_map<string,int> var_index;
-	unordered_map<string,int> vardict;
-	unordered_map<string,int*> arrdict;
-	int var_type[9999];
-	*/
-	unordered_map<string,int>::const_iterator got = var_index.find (s);
-	if(var_index.size()==0)
-		return true;
-	if(got == var_index.end())
-		return true;
-	return false;
-}
-
-void update_var_value(string s,int value){
-	vardict[s] = value;
-}
-
-void update_arr_value(string s, int index,int value){
-	//unordered_map<string,int>::const_iterator got = var_index.find (s);
-	//(got->second)[index] = value;
-	arrdict[s][index] = value;
-}
-
-int getType(string s){
-	unordered_map<string,int>::const_iterator got = var_index.find (s);
-	return var_type[got->second];
-}
-
-void insert_var(string s){
-	/*
-	1 - VARIABLE
-	2 - ARRAY
-	3 - LABEL
-	*/
-	int temp1 = vardict.size();
-	temp1 += arrdict.size();	
-	var_type[temp1] = 1;
-	var_index[s] = temp1;
-	vardict[s] = 0;
-	cout << "Added variable " << s << endl;
-}
-
-void insert_arr(string s,int size){
-	int temp1 = vardict.size();
-	temp1 += arrdict.size();	
-	var_type[temp1] = 2;
-	var_index[s] = temp1;
-	arrdict[s] = new int[size];
-	cout << "Added array " << s << " of size " << size << endl;
-
-}
-
-void insert_label(string s){
-	int temp1 = vardict.size();
-	temp1 += arrdict.size();	
-	var_type[temp1] = 3;
-	var_index[s] = temp1;
-	vardict[s] = 0;
-}
-
-
 
 void yyerror (string s){
 	extern int yylineno;	// defined and maintained in lex.c
@@ -338,7 +258,11 @@ int main(int argc, char *argv[]){
 	cout << "Parsing started for " << argv[1] << endl;
 	//ASTNode* temp = new ASTNode();
 	//temp->test();
+	Builder = new IRBuilder<>(getGlobalContext());
+    flatBToLLVM = new Module("flatBToLLVM", getGlobalContext());
 	yyparse();
-	Interpreter* interpreter = new Interpreter();
-    root->accept(interpreter);
+	Interpreter evaluator;
+    root->accept(&evaluator);
+    flatBToLLVM->dump();
+    return 0;
 }

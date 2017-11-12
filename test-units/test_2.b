@@ -1,26 +1,25 @@
 declblock{
-	int i, n,a,b,c;
+	int a,b,c;
+	int d[5];
 }
 
 codeblock{
-	read n;
-	a = 1;
-	b = 1;
-	if(n>=1){
-		println a;
+	a = 5+4+5;
+	b = 6*7;
+	if(a>4){
+		a = a+10;
 	}
-	if(n>=2){
-		println b;
-	}
-	n = n-2;
-	while(n>0){
+	println "value of a is ",a;
+	L1:
+	for i=1,2,10{
+		a = a+1;
+		println "value of a is ",a;
 	
-		c = a + b;
-		a = b;
-		b = c;
-		println b;
-		n = n-1;
 	}
-	
-
+	goto L1 if 1<=2;
+	while(a>20){
+	a = a-1;
+	read a;
+	println "value of a is ",a;
+	}
 }
